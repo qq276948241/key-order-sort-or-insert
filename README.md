@@ -386,6 +386,36 @@ assert.deepEqual(primitiveValues, { a: '15', b: 'true', c: 'null' });
 
 If you wish to auto-convert values which look like numbers, booleans, and other values into their primitive counterparts, you can use the [query-types Express JS middleware](https://github.com/xpepermint/query-types) which will auto-convert all request query parameters.
 
+### Typed round-trip
+
+If you control both sides of the wire, the `typed` option makes values round-trip with their original types.
+When `typed` is `true`, `stringify` prepends a type marker to every encoded value, and `parse` uses the marker to restore the type.
+Each type has its own marker: `_n_` for numbers, `_b_` for booleans, `_s_` for strings, `_e_` for empty strings, `_z_` for `null`, `_A_` for empty arrays, and `_O_` for empty objects.
+
+```javascript
+var typed = qs.stringify({ n: 1.5, b: true, s: 'x', e: '', z: null, a: [], o: {} }, { typed: true });
+assert.equal(typed, 'n=_n_1.5&b=_b_1&s=_s_x&e=_e_&z=_z_&a=_A_&o=_O_');
+
+var restored = qs.parse(typed, { typed: true });
+assert.deepEqual(restored, { n: 1.5, b: true, s: 'x', e: '', z: null, a: [], o: {} });
+```
+
+Markers are pure ASCII and are added after percent-encoding, so they survive `charset` switching and can never be confused with escaped content.
+Nested arrays and objects keep their types at every level, and strings that merely look like markers are wrapped in a `_s_` marker of their own.
+
+```javascript
+var tricky = qs.stringify({ s: '_n_5', deep: { list: [1, 'two', false] } }, { typed: true, charset: 'iso-8859-1' });
+assert.deepEqual(qs.parse(tricky, { typed: true, charset: 'iso-8859-1' }), { s: '_n_5', deep: { list: [1, 'two', false] } });
+```
+
+When a marker claims a type that its value cannot satisfy, `parse` throws a `TypeError` naming the key, the written value, and the decoded value:
+
+```javascript
+assert['throws'](function () { qs.parse('age=_n_abc', { typed: true }); }, TypeError);
+```
+
+Without the `typed` option, both `stringify` and `parse` behave exactly as before, and markers in the input are treated as plain text.
+
 ### Stringifying
 
 [](#preventEval)
