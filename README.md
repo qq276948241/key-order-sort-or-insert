@@ -386,6 +386,26 @@ assert.deepEqual(primitiveValues, { a: '15', b: 'true', c: 'null' });
 
 If you wish to auto-convert values which look like numbers, booleans, and other values into their primitive counterparts, you can use the [query-types Express JS middleware](https://github.com/xpepermint/query-types) which will auto-convert all request query parameters.
 
+### Type-preserving round-trips
+
+If you need to write a structure into a query string and read it back with the exact same types, pass `types: true` to both `stringify` and `parse`.
+Every value is tagged with a type marker that lives in an extra position in the string, so keys and values themselves are untouched: `s!` for strings, `n!` for numbers, `b!` for booleans, `z!` for explicit `null`, `!a` / `!o` on key segments for arrays and objects, and `e!a` / `e!o` as placeholders for empty arrays and empty objects (an empty string is just `s!` with no content).
+
+```javascript
+var input = { n: 1.5, b: false, nil: null, s: 'x', empty: [], o: {}, nested: { a: [1, { b: 'y' }] } };
+var str = qs.stringify(input, { types: true });
+// n=n!1.5&b=b!false&nil=z!&s=s!x&empty!a=e!a&o!o=e!o&nested!o[a!a][0]=n!1&nested!o[a!a][1!o][b]=s!y
+assert.deepEqual(qs.parse(str, { types: true }), input);
+```
+
+Markers are added after percent-encoding and removed before decoding, so they survive escaping and `charset` switches (including `iso-8859-1` and `charsetSentinel`), and can never be confused with content — any literal `!` in your data is percent-encoded.
+Parsing without `types: true` (or parsing strings that carry no markers) behaves exactly as before.
+If a marker and the actual structure disagree, `parse` throws a `TypeError` naming the key, the type that was written, and the value that was read:
+
+```javascript
+assert['throws'](function () { qs.parse('a=n!abc', { types: true }); }, /type mismatch at key "a"/);
+```
+
 ### Stringifying
 
 [](#preventEval)
